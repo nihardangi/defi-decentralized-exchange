@@ -33,7 +33,10 @@ contract LPToken is ERC20Burnable, Ownable {
     error LPToken_BurnAmountExccedsBalance();
     error LPToken_NotZeroAddress();
 
-    constructor(address initialOwner) ERC20("LP Token", "LPT") Ownable(initialOwner) {}
+    constructor(address initialOwner, string memory name, string memory symbol)
+        ERC20(name, symbol)
+        Ownable(initialOwner)
+    {}
 
     function burn(uint256 _amount) public override onlyOwner {
         uint256 balance = address(this).balance;
