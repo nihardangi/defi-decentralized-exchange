@@ -76,12 +76,8 @@ contract LiquidityPool is ReentrancyGuard {
     ///  External & Public Functions  ///
     /////////////////////////////////////
     // 1. Check if tokens are in correct amount (using the current pricing of the pool)
-    function addLiquidity(uint256 maxAmount, address user)
-        external
-        payable
-        moreThanZero(msg.value)
-        moreThanZero(maxAmount)
-    {
+    function addLiquidity(uint256 maxAmount) external payable moreThanZero(msg.value) moreThanZero(maxAmount) {
+        address lp = msg.sender;
         uint256 erc20TokensRequired = _calculateERC20TokensRequired(msg.value);
         if (maxAmount < erc20TokensRequired) {
             revert LiquidityPool__LessThanRequiredERC20Tokens();
@@ -90,15 +86,16 @@ contract LiquidityPool is ReentrancyGuard {
         if (erc20TokensRequired == 0) {
             amountToTransfer = maxAmount;
         }
-        bool success = i_token.transferFrom(user, address(this), amountToTransfer);
+        bool success = i_token.transferFrom(lp, address(this), amountToTransfer);
         if (!success) {
             revert LiquidityPool__TransferFailed();
         }
         uint256 lpTokensToMint = _calculateLPTokensToMint(msg.value);
-        _mintLPTokens(lpTokensToMint, user);
+        _mintLPTokens(lpTokensToMint, lp);
     }
 
-    function ethToTokenSwap(address user) external payable moreThanZero(msg.value) nonReentrant returns (uint256) {
+    function ethToTokenSwap() external payable moreThanZero(msg.value) nonReentrant returns (uint256) {
+        address user = msg.sender;
         (uint256 ethReserve, uint256 erc20TokenReserve) = getReserves(msg.value);
         // x * y = k, where x is ETH reserve, y is ERC20 token reserve and k is an invariant that has to remain constant.
         uint256 invariant = ethReserve * erc20TokenReserve;
@@ -114,12 +111,8 @@ contract LiquidityPool is ReentrancyGuard {
         return tokensToTransfer;
     }
 
-    function tokenToETHSwap(uint256 amount, address user)
-        external
-        moreThanZero(amount)
-        nonReentrant
-        returns (uint256)
-    {
+    function tokenToETHSwap(uint256 amount) external moreThanZero(amount) nonReentrant returns (uint256) {
+        address user = msg.sender;
         (uint256 ethReserve, uint256 erc20TokenReserve) = getReserves(0);
         // x * y = k, where x is ETH reserve, y is ERC20 token reserve and k is an invariant that has to remain constant
         uint256 invariant = ethReserve * erc20TokenReserve;
@@ -141,11 +134,9 @@ contract LiquidityPool is ReentrancyGuard {
         return ethToTransfer;
     }
 
-    function removeLiquidity(address lp, uint256 amountOfLPTokens)
-        external
-        moreThanZero(amountOfLPTokens)
-        nonReentrant
-    {
+    // Check if lp actually owns the amount received in input
+    function removeLiquidity(uint256 amountOfLPTokens) external moreThanZero(amountOfLPTokens) nonReentrant {
+        address lp = msg.sender;
         uint256 totalLPTokensMinted = i_LPToken.totalSupply();
         (uint256 ethReserve, uint256 erc20TokenReserve) = getReserves(0);
         uint256 userETHShare = (amountOfLPTokens * ethReserve) / totalLPTokensMinted;

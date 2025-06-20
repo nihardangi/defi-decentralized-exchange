@@ -59,7 +59,7 @@ contract LiquidityPoolTest is Test {
         uint256 maxAmountOfTokens = 2000 ether;
         vm.startPrank(lp1);
         token.approve(address(deployedPool), maxAmountOfTokens);
-        deployedPool.addLiquidity{value: ethToTransfer}(maxAmountOfTokens, lp1);
+        deployedPool.addLiquidity{value: ethToTransfer}(maxAmountOfTokens);
         vm.stopPrank();
         _;
     }
@@ -69,7 +69,7 @@ contract LiquidityPoolTest is Test {
         uint256 maxAmountOfTokens = 2500 ether;
         vm.startPrank(lp2);
         token.approve(address(deployedPool), maxAmountOfTokens);
-        deployedPool.addLiquidity{value: ethToTransfer}(maxAmountOfTokens, lp2);
+        deployedPool.addLiquidity{value: ethToTransfer}(maxAmountOfTokens);
         vm.stopPrank();
         _;
     }
@@ -80,7 +80,7 @@ contract LiquidityPoolTest is Test {
         vm.startPrank(lp1);
         token.approve(address(deployedPool), maxAmountOfTokens);
         vm.expectRevert(LiquidityPool.LiquidityPool__MustBeGreaterThanZero.selector);
-        deployedPool.addLiquidity{value: ethToTransfer}(maxAmountOfTokens, lp1);
+        deployedPool.addLiquidity{value: ethToTransfer}(maxAmountOfTokens);
         vm.stopPrank();
     }
 
@@ -90,7 +90,7 @@ contract LiquidityPoolTest is Test {
         vm.startPrank(lp2);
         token.approve(address(deployedPool), maxAmountOfTokens);
         vm.expectRevert(LiquidityPool.LiquidityPool__LessThanRequiredERC20Tokens.selector);
-        deployedPool.addLiquidity{value: ethToTransfer}(maxAmountOfTokens, lp2);
+        deployedPool.addLiquidity{value: ethToTransfer}(maxAmountOfTokens);
         vm.stopPrank();
     }
 
@@ -101,7 +101,7 @@ contract LiquidityPoolTest is Test {
         vm.startPrank(lp2);
         token.approve(address(deployedPool), maxAmountOfTokens);
         // Protocol would only need 2000 tokens for 1 ETH, so it should transfer only 2000 tokens to itself instead of 2500.
-        deployedPool.addLiquidity{value: ethToTransfer}(maxAmountOfTokens, lp2);
+        deployedPool.addLiquidity{value: ethToTransfer}(maxAmountOfTokens);
         vm.stopPrank();
 
         assert(token.balanceOf(lp2) == LP_START_ERC20_BALANCE - 2000 ether);
@@ -120,7 +120,7 @@ contract LiquidityPoolTest is Test {
     //////////////////////////////////////
     function swapETHForToken(uint256 amountOfETH, address user) private returns (uint256 tokenAmount) {
         vm.prank(user);
-        tokenAmount = deployedPool.ethToTokenSwap{value: amountOfETH}(user);
+        tokenAmount = deployedPool.ethToTokenSwap{value: amountOfETH}();
     }
 
     function testFunctionReturnsCorrectTokenAmountAfterSwappingWithETH()
@@ -139,7 +139,7 @@ contract LiquidityPoolTest is Test {
     function swapTokensForETH(uint256 tokenAmount, address user) private returns (uint256 ethTransferred) {
         vm.startPrank(user);
         token.approve(address(deployedPool), tokenAmount);
-        ethTransferred = deployedPool.tokenToETHSwap(tokenAmount, user);
+        ethTransferred = deployedPool.tokenToETHSwap(tokenAmount);
         vm.stopPrank();
     }
 
@@ -174,8 +174,8 @@ contract LiquidityPoolTest is Test {
         vm.startPrank(lp1);
         uint256 balance = lpToken.balanceOf(lp1);
         lpToken.approve(address(deployedPool), balance);
+        deployedPool.removeLiquidity(lpToken.balanceOf(lp1));
         vm.stopPrank();
-        deployedPool.removeLiquidity(lp1, lpToken.balanceOf(lp1));
         assert(address(lp1).balance == LP_START_ETH_BALANCE);
         assert(token.balanceOf(lp1) == LP_START_ERC20_BALANCE);
     }
@@ -196,8 +196,8 @@ contract LiquidityPoolTest is Test {
         vm.startPrank(lp1);
         uint256 balance = lpToken.balanceOf(lp1);
         lpToken.approve(address(deployedPool), balance);
+        deployedPool.removeLiquidity(lpToken.balanceOf(lp1));
         vm.stopPrank();
-        deployedPool.removeLiquidity(lp1, lpToken.balanceOf(lp1));
 
         assertEq(address(lp1).balance, lpETHBalanceStart + (2 * ethReserve) / 3);
         assertEq(token.balanceOf(lp1), lpERC20BalanceStart + (2 * erc20TokenReserve) / 3);
