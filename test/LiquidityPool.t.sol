@@ -19,8 +19,13 @@ contract LiquidityPoolTest is Test {
     address lp2 = makeAddr("lp2");
     address lp3 = makeAddr("lp3");
 
+    address user1 = makeAddr("user1");
+    address user2 = makeAddr("user2");
+
     uint256 constant LP_START_ETH_BALANCE = 10 ether;
+    uint256 constant USER_START_ETH_BALANCE = 1 ether;
     uint256 constant LP_START_ERC20_BALANCE = 5000 ether;
+    uint256 constant USER_START_ERC20_BALANCE = 200 ether;
 
     function setUp() external {
         deployer = new DeployLiquidityPool();
@@ -38,15 +43,13 @@ contract LiquidityPoolTest is Test {
         vm.deal(lp1, LP_START_ETH_BALANCE);
         vm.deal(lp2, LP_START_ETH_BALANCE);
         vm.deal(lp3, LP_START_ETH_BALANCE);
+
+        vm.deal(user1, USER_START_ETH_BALANCE);
+        token.mint(user1, USER_START_ERC20_BALANCE);
+
+        vm.deal(user2, USER_START_ETH_BALANCE);
+        token.mint(user2, USER_START_ERC20_BALANCE);
     }
-
-    // function testIfEverythingWorking() external view {
-    //     console2.log("address of lp token", deployedPool.getLPTokenAddress());
-    //     ERC20 lpToken = ERC20(deployedPool.getLPTokenAddress());
-
-    //     console2.log("name---------", lpToken.name());
-    //     console2.log("symbol---------", lpToken.symbol());
-    // }
 
     ////////////////////////////////////
     ///       AddLiquidity Tests    ////
@@ -66,7 +69,7 @@ contract LiquidityPoolTest is Test {
         uint256 maxAmountOfTokens = 2500 ether;
         vm.startPrank(lp2);
         token.approve(address(deployedPool), maxAmountOfTokens);
-        deployedPool.addLiquidity{value: ethToTransfer}(maxAmountOfTokens, lp1);
+        deployedPool.addLiquidity{value: ethToTransfer}(maxAmountOfTokens, lp2);
         vm.stopPrank();
         _;
     }
@@ -110,5 +113,93 @@ contract LiquidityPoolTest is Test {
         assert(address(deployedPool).balance == 1 ether);
         assert(token.balanceOf(address(deployedPool)) == 2000 ether);
         assert(lpToken.balanceOf(lp1) == 1 ether);
+    }
+
+    //////////////////////////////////////
+    ///      ethToTokenSwap Tests     ////
+    //////////////////////////////////////
+    function swapETHForToken(uint256 amountOfETH, address user) private returns (uint256 tokenAmount) {
+        vm.prank(user);
+        tokenAmount = deployedPool.ethToTokenSwap{value: amountOfETH}(user);
+    }
+
+    function testFunctionReturnsCorrectTokenAmountAfterSwappingWithETH()
+        external
+        addFirstLiquidity
+        addSecondLiquidity
+    {
+        uint256 amountOfETH = 0.1 ether;
+        uint256 tokenAmount = swapETHForToken(amountOfETH, user2);
+        assert(tokenAmount == 186972557354503969495);
+    }
+
+    //////////////////////////////////////
+    ///      tokenToEthSwap Tests     ////
+    //////////////////////////////////////
+    function swapTokensForETH(uint256 tokenAmount, address user) private returns (uint256 ethTransferred) {
+        vm.startPrank(user);
+        token.approve(address(deployedPool), tokenAmount);
+        ethTransferred = deployedPool.tokenToETHSwap(tokenAmount, user);
+        vm.stopPrank();
+    }
+
+    function testFunctionReturnsCorrectETHAmountAfterSwappingWithERC20()
+        external
+        addFirstLiquidity
+        addSecondLiquidity
+    {
+        uint256 tokenAmount = 100e18;
+        uint256 ethAmount = swapTokensForETH(tokenAmount, user1);
+        // console2.log("user1 token balance-------------", ethAmount);
+        assert(ethAmount == 48246604510113882);
+    }
+
+    function testFunctionReturnsCorrectETHAmountAfterMutipleSwaps() external addFirstLiquidity addSecondLiquidity {
+        uint256 tokenAmountForSwap1 = 50e18;
+        swapTokensForETH(tokenAmountForSwap1, user1);
+        uint256 ethAmountForSwap2 = 0.025 ether;
+        uint256 tokenAmount = swapETHForToken(ethAmountForSwap2, user2);
+        console2.log("user1 token balance-------------", tokenAmount);
+
+        uint256 tokenAmountForSwap3 = 50e18;
+        uint256 ethAmount = swapTokensForETH(tokenAmountForSwap3, user1);
+        console2.log("user1 token balance-------------", ethAmount);
+        // assert(ethAmount == 186972557354503969495);
+    }
+
+    //////////////////////////////////////
+    ///     removeLiquidity Tests     ////
+    //////////////////////////////////////
+    function testFunctionReturnsCorrectStakeBackToLPBeforeAnySwaps() external addFirstLiquidity addSecondLiquidity {
+        vm.startPrank(lp1);
+        uint256 balance = lpToken.balanceOf(lp1);
+        lpToken.approve(address(deployedPool), balance);
+        vm.stopPrank();
+        deployedPool.removeLiquidity(lp1, lpToken.balanceOf(lp1));
+        assert(address(lp1).balance == LP_START_ETH_BALANCE);
+        assert(token.balanceOf(lp1) == LP_START_ERC20_BALANCE);
+    }
+
+    function testFunctionReturnsCorrectStakeBackToLPAfter2Swaps() external addFirstLiquidity addSecondLiquidity {
+        uint256 tokenAmountForSwap1 = 50e18;
+        swapTokensForETH(tokenAmountForSwap1, user1);
+        uint256 ethAmountForSwap2 = 0.1 ether;
+        uint256 tokenAmount = swapETHForToken(ethAmountForSwap2, user2);
+        console2.log("user1 token balance-------------", tokenAmount);
+
+        (uint256 ethReserve, uint256 erc20TokenReserve) = deployedPool.getReserves(0);
+        console2.log("eth reserve--------", ethReserve);
+        console2.log("erc20 reserve------", erc20TokenReserve);
+        uint256 lpETHBalanceStart = address(lp1).balance;
+        uint256 lpERC20BalanceStart = token.balanceOf(lp1);
+
+        vm.startPrank(lp1);
+        uint256 balance = lpToken.balanceOf(lp1);
+        lpToken.approve(address(deployedPool), balance);
+        vm.stopPrank();
+        deployedPool.removeLiquidity(lp1, lpToken.balanceOf(lp1));
+
+        assertEq(address(lp1).balance, lpETHBalanceStart + (2 * ethReserve) / 3);
+        assertEq(token.balanceOf(lp1), lpERC20BalanceStart + (2 * erc20TokenReserve) / 3);
     }
 }

@@ -28,7 +28,6 @@ pragma solidity ^0.8.24;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "./LPToken.sol";
-import {console2} from "forge-std/console2.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 contract LiquidityPool is ReentrancyGuard {
@@ -46,7 +45,7 @@ contract LiquidityPool is ReentrancyGuard {
     ////////////////////////////////////
     uint256 private constant PRECISION = 1e18;
     uint256 private constant SWAP_FEE = 3e15; // 0.3% swap fee
-    uint256 private constant SWAP_FEE_PRECISION = 3e18;
+    uint256 private constant SWAP_FEE_PRECISION = 1e18;
 
     ERC20 immutable i_token;
     LPToken immutable i_LPToken;
@@ -83,7 +82,6 @@ contract LiquidityPool is ReentrancyGuard {
         moreThanZero(msg.value)
         moreThanZero(maxAmount)
     {
-        console2.log("my ETH Balance is-------", address(this).balance);
         uint256 erc20TokensRequired = _calculateERC20TokensRequired(msg.value);
         if (maxAmount < erc20TokensRequired) {
             revert LiquidityPool__LessThanRequiredERC20Tokens();
@@ -100,7 +98,7 @@ contract LiquidityPool is ReentrancyGuard {
         _mintLPTokens(lpTokensToMint, user);
     }
 
-    function ethToTokenSwap(address user) external payable moreThanZero(msg.value) {
+    function ethToTokenSwap(address user) external payable moreThanZero(msg.value) nonReentrant returns (uint256) {
         (uint256 ethReserve, uint256 erc20TokenReserve) = getReserves(msg.value);
         // x * y = k, where x is ETH reserve, y is ERC20 token reserve and k is an invariant that has to remain constant.
         uint256 invariant = ethReserve * erc20TokenReserve;
@@ -113,9 +111,15 @@ contract LiquidityPool is ReentrancyGuard {
         if (!success) {
             revert LiquidityPool__TransferFailed();
         }
+        return tokensToTransfer;
     }
 
-    function tokenToETHSwap(uint256 amount, address user) external nonReentrant {
+    function tokenToETHSwap(uint256 amount, address user)
+        external
+        moreThanZero(amount)
+        nonReentrant
+        returns (uint256)
+    {
         (uint256 ethReserve, uint256 erc20TokenReserve) = getReserves(0);
         // x * y = k, where x is ETH reserve, y is ERC20 token reserve and k is an invariant that has to remain constant
         uint256 invariant = ethReserve * erc20TokenReserve;
@@ -134,9 +138,36 @@ contract LiquidityPool is ReentrancyGuard {
         if (!sent) {
             revert LiquidityPool__FailedToSendETH();
         }
+        return ethToTransfer;
     }
 
-    function removeLiquidity() external {}
+    function removeLiquidity(address lp, uint256 amountOfLPTokens)
+        external
+        moreThanZero(amountOfLPTokens)
+        nonReentrant
+    {
+        uint256 totalLPTokensMinted = i_LPToken.totalSupply();
+        (uint256 ethReserve, uint256 erc20TokenReserve) = getReserves(0);
+        uint256 userETHShare = (amountOfLPTokens * ethReserve) / totalLPTokensMinted;
+        uint256 userERC20TokensShare = (amountOfLPTokens * erc20TokenReserve) / totalLPTokensMinted;
+
+        bool success = i_LPToken.transferFrom(lp, address(this), amountOfLPTokens);
+        if (!success) {
+            revert LiquidityPool__TransferFailed();
+        }
+        _burnLPTokens(amountOfLPTokens);
+
+        // Send ETH back to liquidity provider
+        (bool sent,) = lp.call{value: userETHShare}("");
+        if (!sent) {
+            revert LiquidityPool__FailedToSendETH();
+        }
+        // Send ERC20 tokens back to liquidity provider
+        bool transferred = i_token.transfer(lp, userERC20TokensShare);
+        if (!transferred) {
+            revert LiquidityPool__TransferFailed();
+        }
+    }
 
     ////////////////////////////////////////
     ///  Private and Internal Functions  ///
@@ -173,17 +204,11 @@ contract LiquidityPool is ReentrancyGuard {
     ////////////////////////////////////////////
     ///  Public and External View Functions  ///
     ////////////////////////////////////////////
-    // function getName() external view returns (string memory) {
-    //     string memory tokenSymbol = ERC20(address(i_token)).symbol();
-    //     // returns name like ETH/DOGE or ETH/WETH
-    //     return string.concat("ETH/", tokenSymbol);
-    // }
     function calculatePriceOfTokenPerETH(uint256 ethDepositByUser) public view returns (uint256) {
         (uint256 ethReserve, uint256 erc20TokenReserve) = getReserves(ethDepositByUser);
         if (erc20TokenReserve == 0) {
             return 0;
         }
-        console2.log("price is------------", erc20TokenReserve * PRECISION / ethReserve);
         return erc20TokenReserve * PRECISION / ethReserve;
     }
 
