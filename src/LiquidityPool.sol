@@ -50,6 +50,14 @@ contract LiquidityPool is ReentrancyGuard {
     ERC20 immutable i_token;
     LPToken immutable i_LPToken;
 
+    /////////////////////////////////////
+    ///           Events              ///
+    /////////////////////////////////////
+    event AddLiquidity(address indexed liquidityProvider, uint256 indexed ethAmount, uint256 indexed tokenAmount);
+    event RemoveLiquidity(address indexed liquidityProvider, uint256 indexed ethAmount, uint256 indexed tokenAmount);
+    event ERC20TokenPurchased(address indexed user, uint256 indexed ethSold, uint256 indexed tokensBought);
+    event ETHPurchased(address indexed user, uint256 indexed tokensSold, uint256 indexed ethBought);
+
     ///////////////////////////////////
     ///         Modifiers           ///
     ///////////////////////////////////
@@ -92,6 +100,7 @@ contract LiquidityPool is ReentrancyGuard {
         }
         uint256 lpTokensToMint = _calculateLPTokensToMint(msg.value);
         _mintLPTokens(lpTokensToMint, lp);
+        emit AddLiquidity(lp, msg.value, amountToTransfer);
     }
 
     function ethToTokenSwap() external payable moreThanZero(msg.value) nonReentrant returns (uint256) {
@@ -108,6 +117,7 @@ contract LiquidityPool is ReentrancyGuard {
         if (!success) {
             revert LiquidityPool__TransferFailed();
         }
+        emit ERC20TokenPurchased(user, msg.value, tokensToTransfer);
         return tokensToTransfer;
     }
 
@@ -131,6 +141,7 @@ contract LiquidityPool is ReentrancyGuard {
         if (!sent) {
             revert LiquidityPool__FailedToSendETH();
         }
+        emit ETHPurchased(user, amount, ethToTransfer);
         return ethToTransfer;
     }
 
@@ -158,6 +169,7 @@ contract LiquidityPool is ReentrancyGuard {
         if (!transferred) {
             revert LiquidityPool__TransferFailed();
         }
+        emit RemoveLiquidity(lp, userETHShare, userERC20TokensShare);
     }
 
     ////////////////////////////////////////
