@@ -28,6 +28,12 @@ pragma solidity ^0.8.24;
 import {ERC20Burnable, ERC20} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
+/*
+     * @title LPToken
+     * @author Nihar Dangi     
+     *
+     * @notice This contract creates an ERC20 burnable token. Owner can mint and burn tokens     
+*/
 contract LPToken is ERC20Burnable, Ownable {
     error LPToken_MustBeGreaterThanZero();
     error LPToken_BurnAmountExccedsBalance();
@@ -38,6 +44,9 @@ contract LPToken is ERC20Burnable, Ownable {
         Ownable(initialOwner)
     {}
 
+    /*
+     * @param _amount: Amount of tokens to burn
+     */
     function burn(uint256 _amount) public override onlyOwner {
         uint256 balance = balanceOf(msg.sender);
         if (_amount <= 0) {
@@ -49,6 +58,10 @@ contract LPToken is ERC20Burnable, Ownable {
         super.burn(_amount);
     }
 
+    /*
+     * @param _to: Address of the receiver of newly minted tokens
+     * @param _amount: Amount of tokens to mint
+     */
     function mint(address _to, uint256 _amount) external onlyOwner returns (bool) {
         if (_to == address(0)) {
             revert LPToken_NotZeroAddress();

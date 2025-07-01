@@ -23,7 +23,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
      *
      * @notice This contract creates a liquidity pool for a ETH <-> ERC20 token pair. It handles all the logic for adding and 
      * removing liquidity and ETH <-> ERC20 token swaps.
-     */
+*/
 contract LiquidityPool is ReentrancyGuard {
     /////////////////////////////////////
     ///           Errors              ///
