@@ -1,28 +1,4 @@
 // SPDX-License-Identifier: MIT
-
-// This is considered an Exogenous, Decentralized, Anchored (pegged), Crypto Collateralized low volatility coin
-
-// Layout of Contract:
-// version
-// imports
-// interfaces, libraries, contracts
-// errors
-// Type declarations
-// State variables
-// Events
-// Modifiers
-// Functions
-
-// Layout of Functions:
-// constructor
-// receive function (if exists)
-// fallback function (if exists)
-// external
-// public
-// internal
-// private
-// view & pure functions
-
 pragma solidity ^0.8.24;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -30,6 +6,24 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "./LPToken.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+/*
+     * @title LiquidityPool
+     * @author Nihar Dangi
+     *
+     * The contract is designed to be as minimal as possible. 
+     * It is based on Uniswap v1 model.   
+     *      
+     * Liquidity pool can be created for every ETH <-> ERC20 token pair.
+     * For every liquidity pool, a liquidity provider token is initialized which helps in keeping 
+     * track of each liquidity provider's share.
+     * Anyone can create a pool and anyone can become a liquidity provider.
+     * Protocol charges 0.3% swap fee from users which is added back to the pool.
+     * Arbitrage oppotunities ensure that the prices very quickly become equal to the market price after a trade is executed.
+     *  
+     *
+     * @notice This contract creates a liquidity pool for a ETH <-> ERC20 token pair. It handles all the logic for adding and 
+     * removing liquidity and ETH <-> ERC20 token swaps.
+     */
 contract LiquidityPool is ReentrancyGuard {
     /////////////////////////////////////
     ///           Errors              ///
@@ -83,7 +77,12 @@ contract LiquidityPool is ReentrancyGuard {
     /////////////////////////////////////
     ///  External & Public Functions  ///
     /////////////////////////////////////
-    // 1. Check if tokens are in correct amount (using the current pricing of the pool)
+    /*
+     * @param maxAmount: Maximum amount of tokens that the user is willing to add to the pool 
+     * @notice Adds liquidity to the pool. 
+     * @notice Expects user's deposit (in value) to be comprised of 50% ETH and 50% ERC 20 tokens.
+     * @notice Checks if tokens are in correct amount (using the current pricing of the pool)
+     */
     function addLiquidity(uint256 maxAmount) external payable moreThanZero(msg.value) moreThanZero(maxAmount) {
         address lp = msg.sender;
         uint256 erc20TokensRequired = _calculateERC20TokensRequired(msg.value);
@@ -103,6 +102,10 @@ contract LiquidityPool is ReentrancyGuard {
         emit AddLiquidity(lp, msg.value, amountToTransfer);
     }
 
+    /*    
+     * @notice Swaps ETH for ERC20 tokens. 
+     * @notice Uses x * y = k constant product AMM formula to determine the amount of tokens to be transferred to the user.
+     */
     function ethToTokenSwap() external payable moreThanZero(msg.value) nonReentrant returns (uint256) {
         address user = msg.sender;
         (uint256 ethReserve, uint256 erc20TokenReserve) = getReserves(msg.value);
@@ -121,6 +124,11 @@ contract LiquidityPool is ReentrancyGuard {
         return tokensToTransfer;
     }
 
+    /*    
+     * @param amount: The amount of ERC20 tokens that user wants to swap for ETH.
+     * @notice Swaps ERC20 tokens for ETH. 
+     * @notice Uses x * y = k constant product AMM formula to determine the amount of ETH to be transferred to the user.
+     */
     function tokenToETHSwap(uint256 amount) external moreThanZero(amount) nonReentrant returns (uint256) {
         address user = msg.sender;
         (uint256 ethReserve, uint256 erc20TokenReserve) = getReserves(0);
@@ -145,7 +153,13 @@ contract LiquidityPool is ReentrancyGuard {
         return ethToTransfer;
     }
 
-    // Check if lp actually owns the amount received in input
+    /*    
+     * @param amountOfLPTokens: The amount of LP tokens that user wants to liquidate.
+     * @notice Calculates the amount of ETH and ERC20 tokens to transfer back to the user based on the amount of LP tokens.
+     * @notice Transfers the LP tokens from the user to this contract.
+     * @notice Burn the LP tokens
+     * @notice Now, transfer the calculated(user's share) ETH and ERC20 tokens to the user.
+     */
     function removeLiquidity(uint256 amountOfLPTokens) external moreThanZero(amountOfLPTokens) nonReentrant {
         address lp = msg.sender;
         uint256 totalLPTokensMinted = i_LPToken.totalSupply();
